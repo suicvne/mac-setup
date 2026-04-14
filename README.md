@@ -16,14 +16,14 @@ MacSetup is now a native macOS SwiftUI app for rebuilding a Mac with a brew-firs
 ## Run it
 
 ```bash
-cd /Users/mike/Documents/MacSetup
+cd /Users/USER/Documents/MacSetup
 swift run MacSetupApp
 ```
 
 ## Build a `.app`
 
 ```bash
-cd /Users/mike/Documents/MacSetup
+cd /Users/USER/Documents/MacSetup
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -project MacSetup.xcodeproj \
   -scheme MacSetup \
@@ -34,13 +34,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 The finished app bundle will be at:
 
 ```bash
-/Users/mike/Documents/MacSetup/build/Build/Products/Release/MacSetup.app
+/Users/USER/Documents/MacSetup/build/Build/Products/Release/MacSetup.app
 ```
 
 Inside the app bundle, the default config lives at:
 
 ```bash
-/Users/mike/Documents/MacSetup/build/Build/Products/Release/MacSetup.app/Contents/Resources/catalog.json
+/Users/USER/Documents/MacSetup/build/Build/Products/Release/MacSetup.app/Contents/Resources/catalog.json
 ```
 
 ## Current scope
