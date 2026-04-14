@@ -1,0 +1,360 @@
+{
+  "apps": [
+    {
+      "id": "orion",
+      "category": "Browsers",
+      "name": "Orion",
+      "installType": "brewCask",
+      "packageID": "orion",
+      "url": null,
+      "appPath": "/Applications/Orion.app",
+      "notes": "Preferred browser."
+    },
+    {
+      "id": "librewolf",
+      "category": "Browsers",
+      "name": "LibreWolf",
+      "installType": "brewCask",
+      "packageID": "librewolf",
+      "url": null,
+      "appPath": "/Applications/LibreWolf.app",
+      "notes": "Privacy browser."
+    },
+    {
+      "id": "syncthing-macos",
+      "category": "Sync",
+      "name": "Syncthing macOS",
+      "installType": "brewCask",
+      "packageID": "syncthing-macos",
+      "url": null,
+      "appPath": "/Applications/Syncthing.app",
+      "notes": "Menu bar wrapper and launcher."
+    },
+    {
+      "id": "vscodium",
+      "category": "Development",
+      "name": "VSCodium",
+      "installType": "brewCask",
+      "packageID": "vscodium",
+      "url": null,
+      "appPath": "/Applications/VSCodium.app",
+      "notes": "Editor."
+    },
+    {
+      "id": "qt",
+      "category": "Development",
+      "name": "Qt 6",
+      "installType": "brewFormula",
+      "packageID": "qt",
+      "url": null,
+      "appPath": null,
+      "notes": "Qt framework."
+    },
+    {
+      "id": "qt-creator",
+      "category": "Development",
+      "name": "Qt Creator",
+      "installType": "brewCask",
+      "packageID": "qt-creator",
+      "url": null,
+      "appPath": "/Applications/Qt Creator.app",
+      "notes": "Qt IDE."
+    },
+    {
+      "id": "codex",
+      "category": "Development",
+      "name": "Codex",
+      "installType": "manual",
+      "packageID": null,
+      "url": "https://openai.com/codex/",
+      "appPath": "/Applications/Codex.app",
+      "notes": "Install from the vendor page if you want the desktop app on a fresh machine."
+    },
+    {
+      "id": "steam",
+      "category": "Games",
+      "name": "Steam",
+      "installType": "brewCask",
+      "packageID": "steam",
+      "url": null,
+      "appPath": "/Applications/Steam.app",
+      "notes": "Game launcher."
+    },
+    {
+      "id": "pcsx2",
+      "category": "Games",
+      "name": "PCSX2",
+      "installType": "brewCask",
+      "packageID": "pcsx2",
+      "url": null,
+      "appPath": "/Applications/PCSX2.app",
+      "notes": "PlayStation 2 emulator."
+    },
+    {
+      "id": "ppsspp",
+      "category": "Games",
+      "name": "PPSSPP",
+      "installType": "brewCask",
+      "packageID": "ppsspp",
+      "url": null,
+      "appPath": "/Applications/PPSSPP.app",
+      "notes": "PSP emulator."
+    },
+    {
+      "id": "ps-remote-play",
+      "category": "Games",
+      "name": "PS Remote Play",
+      "installType": "manual",
+      "packageID": null,
+      "url": "https://remoteplay.dl.playstation.net/remoteplay/",
+      "appPath": "/Applications/PS Remote Play.app",
+      "notes": "Sony does not consistently provide a stable Homebrew-friendly installer."
+    },
+    {
+      "id": "transmission",
+      "category": "Utilities",
+      "name": "Transmission",
+      "installType": "brewCask",
+      "packageID": "transmission",
+      "url": null,
+      "appPath": "/Applications/Transmission.app",
+      "notes": "BitTorrent client."
+    },
+    {
+      "id": "hex-fiend",
+      "category": "Utilities",
+      "name": "Hex Fiend",
+      "installType": "brewCask",
+      "packageID": "hex-fiend",
+      "url": null,
+      "appPath": "/Applications/Hex Fiend.app",
+      "notes": "Hex editor."
+    },
+    {
+      "id": "grandperspective",
+      "category": "Utilities",
+      "name": "GrandPerspective",
+      "installType": "brewCask",
+      "packageID": "grandperspective",
+      "url": null,
+      "appPath": "/Applications/GrandPerspective.app",
+      "notes": "Disk visualizer."
+    },
+    {
+      "id": "discord",
+      "category": "Utilities",
+      "name": "Discord",
+      "installType": "brewCask",
+      "packageID": "discord",
+      "url": null,
+      "appPath": "/Applications/Discord.app",
+      "notes": "Chat."
+    },
+    {
+      "id": "cyberduck",
+      "category": "Utilities",
+      "name": "Cyberduck",
+      "installType": "brewCask",
+      "packageID": "cyberduck",
+      "url": null,
+      "appPath": "/Applications/Cyberduck.app",
+      "notes": "File transfer."
+    },
+    {
+      "id": "caffeine",
+      "category": "Utilities",
+      "name": "Caffeine",
+      "installType": "brewCask",
+      "packageID": "caffeine",
+      "url": null,
+      "appPath": "/Applications/Caffeine.app",
+      "notes": "Prevent sleep."
+    },
+    {
+      "id": "linearmouse",
+      "category": "Utilities",
+      "name": "LinearMouse",
+      "installType": "brewCask",
+      "packageID": "linearmouse",
+      "url": null,
+      "appPath": "/Applications/LinearMouse.app",
+      "notes": "Mouse utility."
+    },
+    {
+      "id": "rectangle",
+      "category": "Utilities",
+      "name": "Rectangle",
+      "installType": "brewCask",
+      "packageID": "rectangle",
+      "url": null,
+      "appPath": "/Applications/Rectangle.app",
+      "notes": "Open-source window manager."
+    },
+    {
+      "id": "mx-power-gadget",
+      "category": "Utilities",
+      "name": "Mx Power Gadget",
+      "installType": "manual",
+      "packageID": null,
+      "url": "https://github.com/Kyome22/MxPowerGadget",
+      "appPath": "/Applications/Mx Power Gadget.app",
+      "notes": "Install from the project release page."
+    }
+  ],
+  "settings": [
+    {
+      "id": "software-update",
+      "name": "Automatic updates: download only",
+      "commands": [
+        "defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true",
+        "defaults write com.apple.SoftwareUpdate AutomaticDownload -bool true",
+        "defaults write com.apple.SoftwareUpdate AutomaticallyInstallMacOSUpdates -bool false",
+        "defaults write com.apple.commerce AutoUpdate -bool false"
+      ],
+      "notes": "Keeps update checks and downloads enabled while avoiding automatic OS installs.",
+      "isVersionSensitive": false
+    },
+    {
+      "id": "appearance-auto",
+      "name": "Appearance: auto",
+      "commands": [
+        "defaults -currentHost write NSGlobalDomain AppleInterfaceStyleSwitchesAutomatically -bool true"
+      ],
+      "notes": "Uses automatic light/dark switching.",
+      "isVersionSensitive": false
+    },
+    {
+      "id": "accent-red",
+      "name": "Accent color: red",
+      "commands": [
+        "defaults write NSGlobalDomain AppleAccentColor -int 0"
+      ],
+      "notes": "Sets the system accent color to red.",
+      "isVersionSensitive": false
+    },
+    {
+      "id": "sidebar-small",
+      "name": "Sidebar icon size: small",
+      "commands": [
+        "defaults write NSGlobalDomain NSTableViewDefaultSizeMode -int 1"
+      ],
+      "notes": "Shrinks Finder and sidebar list rows.",
+      "isVersionSensitive": false
+    },
+    {
+      "id": "dock",
+      "name": "Dock layout and behavior",
+      "commands": [
+        "defaults write com.apple.dock orientation -string left",
+        "defaults write com.apple.dock tilesize -int 46",
+        "defaults write com.apple.dock magnification -bool true",
+        "defaults write com.apple.dock largesize -int 64",
+        "defaults write com.apple.dock show-recents -bool false",
+        "defaults write NSGlobalDomain AppleActionOnDoubleClick -string Fill"
+      ],
+      "notes": "Places the Dock on the left, enables moderate magnification, and disables recent apps.",
+      "isVersionSensitive": false
+    },
+    {
+      "id": "battery-percent",
+      "name": "Battery percentage in menu bar",
+      "commands": [
+        "defaults -currentHost write com.apple.controlcenter BatteryShowPercentage -bool true"
+      ],
+      "notes": "Shows battery percentage in the menu bar.",
+      "isVersionSensitive": false
+    },
+    {
+      "id": "accessibility-baseline",
+      "name": "Accessibility baseline",
+      "commands": [
+        "defaults write com.apple.universalaccess differentiateWithoutColor -bool true",
+        "defaults write NSGlobalDomain NSToolbarButtonSizeMode -int 1"
+      ],
+      "notes": "Turns on differentiate without color and compact toolbar sizing.",
+      "isVersionSensitive": false
+    }
+  ],
+  "manualSteps": [
+    {
+      "id": "software-update-review",
+      "area": "General",
+      "title": "Software Update review",
+      "detail": "Open Software Update once and confirm automatic updates are set to download only.",
+      "link": "x-apple.systempreferences:com.apple.Software-Update-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "apple-intelligence",
+      "area": "Settings",
+      "title": "Apple Intelligence",
+      "detail": "Turn Apple Intelligence off in System Settings if the machine supports it.",
+      "link": "x-apple.systempreferences:com.apple.preferences",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "default-browser",
+      "area": "Settings",
+      "title": "Default browser",
+      "detail": "Set Orion as the default browser after Orion is installed.",
+      "link": "x-apple.systempreferences:com.apple.Desktop-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "display-scaling",
+      "area": "Settings",
+      "title": "Display scaling and brightness",
+      "detail": "On laptops, switch to More Space, turn off automatic brightness, and set brightness to about 50%.",
+      "link": "x-apple.systempreferences:com.apple.Displays-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "menu-bar",
+      "area": "Settings",
+      "title": "Menu bar cleanup",
+      "detail": "Keep Control Center, Spotlight, Wi-Fi, Battery with percent, and Syncthing. Hide the rest.",
+      "link": "x-apple.systempreferences:com.apple.ControlCenter-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "spotlight-results",
+      "area": "Settings",
+      "title": "Spotlight results",
+      "detail": "Disable Books, Discord, Games, Messages, Pages, Phone, Photos, Podcasts, Reminders, Shortcuts, Tips, and Voice Memos.",
+      "link": "x-apple.systempreferences:com.apple.Siri-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "widgets",
+      "area": "Settings",
+      "title": "Widgets",
+      "detail": "Set widgets to nowhere.",
+      "link": "x-apple.systempreferences:com.apple.NotificationCenter-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "desktop-click",
+      "area": "Settings",
+      "title": "Desktop click behavior",
+      "detail": "Use Only in Stage Manager for clicking wallpaper to show desktop.",
+      "link": "x-apple.systempreferences:com.apple.Desktop-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "title-icons",
+      "area": "Settings",
+      "title": "Window title icons and text size",
+      "detail": "Turn on window title icons and use 11pt text if the current macOS version exposes those controls.",
+      "link": "x-apple.systempreferences:com.apple.Accessibility-Settings.extension",
+      "minimumMajorVersion": null
+    },
+    {
+      "id": "liquid-glass",
+      "area": "Tahoe+",
+      "title": "Liquid Glass tint",
+      "detail": "Use the Tinted Liquid Glass style and adjust folder color to a Sequoia-like blue.",
+      "link": "x-apple.systempreferences:com.apple.Appearance-Settings.extension",
+      "minimumMajorVersion": 26
+    }
+  ]
+}
