@@ -48,7 +48,7 @@ Inside the app bundle, the default config lives at:
 The SwiftUI app already handles the core workflow, but a few things are intentionally still conservative:
 
 - Command Line Tools and Homebrew can now be triggered automatically, but macOS may still require you to confirm installer prompts before the run can continue.
-- Direct vendor `PKG`/`DMG`/`ZIP` installers are modeled, but not yet connected in the app runner.
+- Direct vendor `PKG`/`DMG`/`ZIP` installers are supported for catalog entries that provide trusted download URLs.
 - UI-only settings like Apple Intelligence, Spotlight categories, Liquid Glass tint, and menu bar cleanup still live in the manual checklist.
 
 ## Project layout
@@ -69,5 +69,5 @@ The SwiftUI app already handles the core workflow, but a few things are intentio
 ## Recommended next tweaks
 
 - Add profile support like `personal`, `work`, and `gaming`.
-- Wire in direct download installers for the non-Homebrew apps you trust most.
+- Add signature or checksum verification for direct download installers.
 - Add an optional aggressive UI automation mode later if you want more settings enforced automatically.

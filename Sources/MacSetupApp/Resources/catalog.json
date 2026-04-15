@@ -25,7 +25,7 @@
       "category": "Sync",
       "name": "Syncthing macOS",
       "installType": "brewCask",
-      "packageID": "syncthing-macos",
+      "packageID": "syncthing-app",
       "url": null,
       "appPath": "/Applications/Syncthing.app",
       "notes": "Menu bar wrapper and launcher."
@@ -64,11 +64,11 @@
       "id": "codex",
       "category": "Development",
       "name": "Codex",
-      "installType": "manual",
+      "installType": "internetDmg",
       "packageID": null,
-      "url": "https://openai.com/codex/",
+      "url": "https://github.com/openai/codex/releases/latest/download/codex-aarch64-apple-darwin.dmg",
       "appPath": "/Applications/Codex.app",
-      "notes": "Install from the vendor page if you want the desktop app on a fresh machine."
+      "notes": "Install from the latest OpenAI Codex macOS DMG."
     },
     {
       "id": "steam",
@@ -104,11 +104,11 @@
       "id": "ps-remote-play",
       "category": "Games",
       "name": "PS Remote Play",
-      "installType": "manual",
+      "installType": "internetPkg",
       "packageID": null,
-      "url": "https://remoteplay.dl.playstation.net/remoteplay/",
+      "url": "https://remoteplay.dl.playstation.net/remoteplay/module/mac/RemotePlayInstaller.pkg",
       "appPath": "/Applications/PS Remote Play.app",
-      "notes": "Sony does not consistently provide a stable Homebrew-friendly installer."
+      "notes": "Install from Sony's direct macOS package."
     },
     {
       "id": "transmission",
@@ -194,11 +194,11 @@
       "id": "mx-power-gadget",
       "category": "Utilities",
       "name": "Mx Power Gadget",
-      "installType": "manual",
+      "installType": "internetZip",
       "packageID": null,
-      "url": "https://github.com/Kyome22/MxPowerGadget",
+      "url": "https://www.seense.com/menubarstats/mxpg/updateapp/mxpg.zip",
       "appPath": "/Applications/Mx Power Gadget.app",
-      "notes": "Install from the project release page."
+      "notes": "Install from the developer's direct ZIP download."
     }
   ],
   "settings": [

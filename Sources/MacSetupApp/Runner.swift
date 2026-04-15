@@ -37,6 +37,127 @@ enum Shell {
         }
     }
 
+    static func runStreaming(
+        _ command: [String],
+        onStdoutLine: (@Sendable (String) async -> Void)? = nil,
+        onStderrLine: (@Sendable (String) async -> Void)? = nil
+    ) async throws -> ShellResult {
+        let resolvedCommand = try resolveCommand(command)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: resolvedCommand[0])
+            process.arguments = Array(resolvedCommand.dropFirst())
+
+            let stdoutPipe = Pipe()
+            let stderrPipe = Pipe()
+            process.standardOutput = stdoutPipe
+            process.standardError = stderrPipe
+
+            let lock = NSLock()
+            var stdoutData = Data()
+            var stderrData = Data()
+            var stdoutBuffer = ""
+            var stderrBuffer = ""
+
+            func emitAvailableLines(
+                from handle: FileHandle,
+                accumulatedData: inout Data,
+                buffer: inout String,
+                callback: (@Sendable (String) async -> Void)?
+            ) {
+                let chunk = handle.availableData
+                guard !chunk.isEmpty else { return }
+
+                accumulatedData.append(chunk)
+                let text = String(decoding: chunk, as: UTF8.self)
+                buffer.append(text)
+
+                let parts = buffer.split(separator: "\n", omittingEmptySubsequences: false)
+                let endsWithNewline = buffer.hasSuffix("\n")
+                let completeLines = endsWithNewline ? Array(parts) : Array(parts.dropLast())
+                buffer = endsWithNewline ? "" : String(parts.last ?? "")
+
+                for rawLine in completeLines {
+                    let line = String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !line.isEmpty else { continue }
+                    if let callback {
+                        Task {
+                            await callback(line)
+                        }
+                    }
+                }
+            }
+
+            stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+                lock.lock()
+                emitAvailableLines(
+                    from: handle,
+                    accumulatedData: &stdoutData,
+                    buffer: &stdoutBuffer,
+                    callback: onStdoutLine
+                )
+                lock.unlock()
+            }
+
+            stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+                lock.lock()
+                emitAvailableLines(
+                    from: handle,
+                    accumulatedData: &stderrData,
+                    buffer: &stderrBuffer,
+                    callback: onStderrLine
+                )
+                lock.unlock()
+            }
+
+            process.terminationHandler = { proc in
+                stdoutPipe.fileHandleForReading.readabilityHandler = nil
+                stderrPipe.fileHandleForReading.readabilityHandler = nil
+
+                lock.lock()
+
+                let finalStdout = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                if !finalStdout.isEmpty {
+                    stdoutData.append(finalStdout)
+                    stdoutBuffer.append(String(decoding: finalStdout, as: UTF8.self))
+                }
+
+                let finalStderr = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                if !finalStderr.isEmpty {
+                    stderrData.append(finalStderr)
+                    stderrBuffer.append(String(decoding: finalStderr, as: UTF8.self))
+                }
+
+                let trailingStdout = stdoutBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trailingStdout.isEmpty, let onStdoutLine {
+                    Task {
+                        await onStdoutLine(trailingStdout)
+                    }
+                }
+
+                let trailingStderr = stderrBuffer.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trailingStderr.isEmpty, let onStderrLine {
+                    Task {
+                        await onStderrLine(trailingStderr)
+                    }
+                }
+
+                let stdout = String(data: stdoutData, encoding: .utf8) ?? ""
+                let stderr = String(data: stderrData, encoding: .utf8) ?? ""
+                lock.unlock()
+
+                continuation.resume(returning: ShellResult(exitCode: proc.terminationStatus, stdout: stdout, stderr: stderr))
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
     static func resolveCommand(_ command: [String]) throws -> [String] {
         guard let executable = command.first else { return command }
         guard !executable.isEmpty else { return command }
@@ -297,7 +418,7 @@ final class SetupViewModel: ObservableObject {
             case .manual, .appStore:
                 await handleManualApp(app)
             case .internetPkg, .internetDmg, .internetZip:
-                await skipUnsupportedDirectDownload(app)
+                await installDirectDownloadApp(app)
             }
         }
     }
@@ -440,17 +561,38 @@ final class SetupViewModel: ObservableObject {
         }
 
         do {
-            let result = try await Shell.run(command)
+            await updateAppStatus(id: app.id, status: .running, detail: "Installing via Homebrew...")
+            await appendLog("Installing \(app.name) with Homebrew...")
+
+            let result = try await Shell.runStreaming(
+                command,
+                onStdoutLine: { [weak self] line in
+                    guard let self else { return }
+                    await self.appendLog(line)
+                    await self.updateAppStatus(
+                        id: app.id,
+                        status: .running,
+                        detail: self.progressDetail(for: line, fallback: "Installing via Homebrew...")
+                    )
+                },
+                onStderrLine: { [weak self] line in
+                    guard let self else { return }
+                    await self.appendLog(line)
+                    await self.updateAppStatus(
+                        id: app.id,
+                        status: .running,
+                        detail: self.progressDetail(for: line, fallback: "Installing via Homebrew...")
+                    )
+                }
+            )
             if result.exitCode == 0 {
                 await updateAppStatus(id: app.id, status: .ok, detail: "Installed via Homebrew (\(packageID)).")
-                let stdout = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !stdout.isEmpty {
-                    await appendLog(stdout)
-                }
             } else {
                 let errorText = result.stderr.isEmpty ? "Homebrew install failed." : result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
                 await updateAppStatus(id: app.id, status: .failed, detail: errorText)
-                await appendLog(errorText)
+                if result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    await appendLog(errorText)
+                }
             }
         } catch {
             await updateAppStatus(id: app.id, status: .failed, detail: error.localizedDescription)
@@ -470,11 +612,47 @@ final class SetupViewModel: ObservableObject {
         }
     }
 
-    private func skipUnsupportedDirectDownload(_ app: AppDefinition) async {
+    private func installDirectDownloadApp(_ app: AppDefinition) async {
+        if let appPath = app.appPath, await pathExists(appPath) {
+            await updateAppStatus(id: app.id, status: .ok, detail: "Already present at \(appPath).")
+            return
+        }
+
+        guard let urlString = app.url, let downloadURL = URL(string: urlString) else {
+            await updateAppStatus(id: app.id, status: .warning, detail: "Missing direct download URL.")
+            return
+        }
+
         if options.dryRun {
-            await updateAppStatus(id: app.id, status: .skipped, detail: "Would install from direct download.")
-        } else {
-            await updateAppStatus(id: app.id, status: .warning, detail: "Direct downloads are not wired into the SwiftUI app yet.")
+            await updateAppStatus(id: app.id, status: .skipped, detail: "Would install from \(downloadURL.absoluteString).")
+            await appendLog("[dry-run] Direct download install for \(app.name): \(downloadURL.absoluteString)")
+            return
+        }
+
+        do {
+            await updateAppStatus(id: app.id, status: .running, detail: "Downloading installer...")
+            let downloadLocation = try await downloadInstaller(for: app, from: downloadURL)
+
+            switch app.installType {
+            case .internetDmg:
+                try await installFromDownloadedDMG(app: app, dmgURL: downloadLocation)
+            case .internetPkg:
+                try await installFromDownloadedPKG(app: app, pkgURL: downloadLocation)
+            case .internetZip:
+                try await installFromDownloadedZIP(app: app, zipURL: downloadLocation)
+            case .brewFormula, .brewCask, .manual, .appStore:
+                break
+            }
+
+            if let appPath = app.appPath, await pathExists(appPath) == false, app.installType != .internetPkg {
+                await updateAppStatus(id: app.id, status: .warning, detail: "Installer finished, but \(appPath) was not found afterward.")
+                return
+            }
+
+            await updateAppStatus(id: app.id, status: .ok, detail: "Installed from direct download.")
+        } catch {
+            await updateAppStatus(id: app.id, status: .failed, detail: error.localizedDescription)
+            await appendLog("Error installing \(app.name) from direct download: \(error.localizedDescription)")
         }
     }
 
@@ -631,6 +809,18 @@ final class SetupViewModel: ObservableObject {
         return version.majorVersion
     }
 
+    private func progressDetail(for line: String, fallback: String) -> String {
+        let compact = line.replacingOccurrences(of: "\t", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !compact.isEmpty else { return fallback }
+
+        if compact.count <= 90 {
+            return compact
+        }
+
+        let endIndex = compact.index(compact.startIndex, offsetBy: 87)
+        return "\(compact[..<endIndex])..."
+    }
+
     private func updateAppStatus(id: String, status: TaskStatus, detail: String) async {
         guard let index = appRecords.firstIndex(where: { $0.id == id }) else { return }
         appRecords[index].status = status
@@ -649,5 +839,162 @@ final class SetupViewModel: ObservableObject {
 
     private func appendLogSync(_ line: String) {
         logLines.append(line)
+    }
+
+    private func downloadInstaller(for app: AppDefinition, from url: URL) async throws -> URL {
+        await appendLog("Downloading \(app.name) from \(url.absoluteString)")
+
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 600)
+        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            throw NSError(
+                domain: "MacSetup.Download",
+                code: httpResponse.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Download failed with HTTP \(httpResponse.statusCode)."]
+            )
+        }
+
+        let downloadsDirectory = fileManager.temporaryDirectory.appendingPathComponent("MacSetupDownloads", isDirectory: true)
+        try fileManager.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+
+        let filename = sanitizedFilename(for: app, response: response, fallbackURL: url)
+        let destinationURL = downloadsDirectory.appendingPathComponent(filename)
+
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            try fileManager.removeItem(at: destinationURL)
+        }
+
+        try fileManager.moveItem(at: temporaryURL, to: destinationURL)
+        return destinationURL
+    }
+
+    private func installFromDownloadedDMG(app: AppDefinition, dmgURL: URL) async throws {
+        guard let appPath = app.appPath else {
+            throw NSError(domain: "MacSetup.Install", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing appPath for DMG install."])
+        }
+
+        let mountPoint = fileManager.temporaryDirectory
+            .appendingPathComponent("MacSetupMounts", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+
+        await appendLog("Mounting \(dmgURL.lastPathComponent)")
+        let attachResult = try await Shell.run([
+            "/usr/bin/hdiutil", "attach", dmgURL.path,
+            "-nobrowse",
+            "-mountpoint", mountPoint.path
+        ])
+        guard attachResult.exitCode == 0 else {
+            let errorText = attachResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(domain: "MacSetup.Install", code: Int(attachResult.exitCode), userInfo: [NSLocalizedDescriptionKey: errorText.isEmpty ? "Could not mount DMG." : errorText])
+        }
+
+        do {
+            guard let sourceApp = try locateBundle(named: URL(fileURLWithPath: appPath).lastPathComponent, under: mountPoint, withExtension: "app") else {
+                throw NSError(domain: "MacSetup.Install", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not find \(URL(fileURLWithPath: appPath).lastPathComponent) in mounted DMG."])
+            }
+
+            if fileManager.fileExists(atPath: appPath) {
+                try fileManager.removeItem(atPath: appPath)
+            }
+
+            await appendLog("Copying \(sourceApp.lastPathComponent) to \(appPath)")
+            let copyResult = try await Shell.run(["/usr/bin/ditto", sourceApp.path, appPath])
+            guard copyResult.exitCode == 0 else {
+                let errorText = copyResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                throw NSError(domain: "MacSetup.Install", code: Int(copyResult.exitCode), userInfo: [NSLocalizedDescriptionKey: errorText.isEmpty ? "Could not copy app from DMG." : errorText])
+            }
+        } catch {
+            _ = try? await Shell.run(["/usr/bin/hdiutil", "detach", mountPoint.path])
+            try? fileManager.removeItem(at: mountPoint)
+            throw error
+        }
+
+        _ = try? await Shell.run(["/usr/bin/hdiutil", "detach", mountPoint.path])
+        try? fileManager.removeItem(at: mountPoint)
+    }
+
+    private func installFromDownloadedPKG(app: AppDefinition, pkgURL: URL) async throws {
+        await appendLog("Running installer for \(pkgURL.lastPathComponent)")
+        let result = try await Shell.run(["/usr/sbin/installer", "-pkg", pkgURL.path, "-target", "/"])
+        guard result.exitCode == 0 else {
+            let errorText = [result.stdout, result.stderr]
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(domain: "MacSetup.Install", code: Int(result.exitCode), userInfo: [NSLocalizedDescriptionKey: errorText.isEmpty ? "PKG installer failed." : errorText])
+        }
+    }
+
+    private func installFromDownloadedZIP(app: AppDefinition, zipURL: URL) async throws {
+        guard let appPath = app.appPath else {
+            throw NSError(domain: "MacSetup.Install", code: 3, userInfo: [NSLocalizedDescriptionKey: "Missing appPath for ZIP install."])
+        }
+
+        let extractionDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("MacSetupExtracted", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try fileManager.createDirectory(at: extractionDirectory, withIntermediateDirectories: true)
+        defer {
+            try? fileManager.removeItem(at: extractionDirectory)
+        }
+
+        await appendLog("Extracting \(zipURL.lastPathComponent)")
+        let unzipResult = try await Shell.run([
+            "/usr/bin/ditto", "-x", "-k", zipURL.path, extractionDirectory.path
+        ])
+        guard unzipResult.exitCode == 0 else {
+            let errorText = unzipResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(domain: "MacSetup.Install", code: Int(unzipResult.exitCode), userInfo: [NSLocalizedDescriptionKey: errorText.isEmpty ? "Could not extract ZIP archive." : errorText])
+        }
+
+        guard let sourceApp = try locateBundle(named: URL(fileURLWithPath: appPath).lastPathComponent, under: extractionDirectory, withExtension: "app") else {
+            throw NSError(domain: "MacSetup.Install", code: 4, userInfo: [NSLocalizedDescriptionKey: "Could not find \(URL(fileURLWithPath: appPath).lastPathComponent) in extracted ZIP archive."])
+        }
+
+        if fileManager.fileExists(atPath: appPath) {
+            try fileManager.removeItem(atPath: appPath)
+        }
+
+        await appendLog("Copying \(sourceApp.lastPathComponent) to \(appPath)")
+        let copyResult = try await Shell.run(["/usr/bin/ditto", sourceApp.path, appPath])
+        guard copyResult.exitCode == 0 else {
+            let errorText = copyResult.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(domain: "MacSetup.Install", code: Int(copyResult.exitCode), userInfo: [NSLocalizedDescriptionKey: errorText.isEmpty ? "Could not copy app from ZIP archive." : errorText])
+        }
+    }
+
+    private func locateBundle(named bundleName: String, under directory: URL, withExtension requiredExtension: String) throws -> URL? {
+        if fileManager.fileExists(atPath: directory.appendingPathComponent(bundleName).path) {
+            return directory.appendingPathComponent(bundleName)
+        }
+
+        guard let enumerator = fileManager.enumerator(at: directory, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
+            return nil
+        }
+
+        for case let url as URL in enumerator {
+            guard url.pathExtension.caseInsensitiveCompare(requiredExtension) == .orderedSame else { continue }
+            if url.lastPathComponent == bundleName {
+                return url
+            }
+        }
+
+        return nil
+    }
+
+    private func sanitizedFilename(for app: AppDefinition, response: URLResponse, fallbackURL: URL) -> String {
+        let preferredName: String
+        if let suggestedName = response.suggestedFilename, !suggestedName.isEmpty {
+            preferredName = suggestedName
+        } else {
+            preferredName = fallbackURL.lastPathComponent.isEmpty ? app.id : fallbackURL.lastPathComponent
+        }
+
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+        let cleaned = preferredName.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }
+        let filename = String(cleaned)
+        return filename.isEmpty ? app.id : filename
     }
 }
