@@ -57,6 +57,7 @@ The SwiftUI app already handles the core workflow, but a few things are intentio
 - `MacSetup.xcodeproj`: Native Xcode project that builds a standard `.app` bundle.
 - `Sources/MacSetupApp`: App code, models, catalog, runner, and UI.
 - `Sources/MacSetupApp/Resources/catalog.json`: Bundled configuration for apps, settings, and manual steps.
+- `Sources/MacSetupApp/Resources/Assets.xcassets`: Standard asset catalog that carries the app icon so regenerated Xcode projects keep the icon wiring.
 - `bin`, `config`, `lib`: Earlier shell-based version kept for reference while the SwiftUI app takes over.
 
 ## Config workflow

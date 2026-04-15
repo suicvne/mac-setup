@@ -14,7 +14,8 @@ let package = Package(
             name: "MacSetupApp",
             path: "Sources/MacSetupApp",
             resources: [
-                .copy("Resources/catalog.json")
+                .copy("Resources/catalog.json"),
+                .process("Resources/Assets.xcassets")
             ]
         )
     ]
