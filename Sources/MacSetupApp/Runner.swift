@@ -11,10 +11,12 @@ struct ShellResult {
 
 enum Shell {
     static func run(_ command: [String]) async throws -> ShellResult {
-        try await withCheckedThrowingContinuation { continuation in
+        let resolvedCommand = try resolveCommand(command)
+
+        return try await withCheckedThrowingContinuation { continuation in
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: command[0])
-            process.arguments = Array(command.dropFirst())
+            process.executableURL = URL(fileURLWithPath: resolvedCommand[0])
+            process.arguments = Array(resolvedCommand.dropFirst())
 
             let stdoutPipe = Pipe()
             let stderrPipe = Pipe()
@@ -33,6 +35,60 @@ enum Shell {
                 continuation.resume(throwing: error)
             }
         }
+    }
+
+    static func resolveCommand(_ command: [String]) throws -> [String] {
+        guard let executable = command.first else { return command }
+        guard !executable.isEmpty else { return command }
+
+        if executable.hasPrefix("/") {
+            return command
+        }
+
+        let environmentPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        let searchPaths = environmentPath
+            .split(separator: ":")
+            .map(String.init)
+            + ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"]
+
+        let fileManager = FileManager.default
+        for directory in searchPaths {
+            let candidate = URL(fileURLWithPath: directory).appendingPathComponent(executable).path
+            if fileManager.isExecutableFile(atPath: candidate) {
+                return [candidate] + command.dropFirst()
+            }
+        }
+
+        throw CocoaError(.fileNoSuchFile, userInfo: [
+            NSFilePathErrorKey: executable,
+            NSLocalizedDescriptionKey: "Executable '\(executable)' could not be found in PATH."
+        ])
+    }
+
+    static func openCommandInTerminal(_ shellCommand: String) throws {
+        let fileManager = FileManager.default
+        let scriptDirectory = fileManager.temporaryDirectory.appendingPathComponent("MacSetup", isDirectory: true)
+        try fileManager.createDirectory(at: scriptDirectory, withIntermediateDirectories: true)
+
+        let scriptURL = scriptDirectory.appendingPathComponent("install-homebrew.command")
+        let scriptContents = """
+        #!/bin/bash
+        set -e
+        \(shellCommand)
+        status=$?
+        echo
+        if [ $status -eq 0 ]; then
+            echo "Homebrew installation finished."
+        else
+            echo "Homebrew installation failed with status $status."
+        fi
+        echo "You can close this window and return to MacSetup."
+        """
+
+        try scriptContents.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+
+        NSWorkspace.shared.open(scriptURL)
     }
 
     static func tokenize(_ command: String) throws -> [String] {
@@ -202,14 +258,22 @@ final class SetupViewModel: ObservableObject {
     }
 
     private func installApps() async {
-        await ensureCommandLineTools()
-        await ensureHomebrew()
+        let commandLineToolsReady = await ensureCommandLineTools()
+        if !commandLineToolsReady {
+            await appendLog("Skipping Homebrew app installs until Command Line Tools are available.")
+        }
+
+        let homebrewReady = commandLineToolsReady ? await ensureHomebrew() : false
 
         for app in configuration.apps {
             await updateAppStatus(id: app.id, status: .running, detail: "Working...")
             switch app.installType {
             case .brewFormula, .brewCask:
-                await installHomebrewApp(app)
+                if homebrewReady {
+                    await installHomebrewApp(app)
+                } else {
+                    await updateAppStatus(id: app.id, status: .warning, detail: "Skipped because Homebrew prerequisites are not ready yet.")
+                }
             case .manual, .appStore:
                 await handleManualApp(app)
             case .internetPkg, .internetDmg, .internetZip:
@@ -266,24 +330,63 @@ final class SetupViewModel: ObservableObject {
         }
     }
 
-    private func ensureCommandLineTools() async {
-        let installed = await pathExists("/Library/Developer/CommandLineTools")
-        let detail = installed ? "Already installed." : (options.dryRun ? "Would trigger the installer UI." : "Needs installation.")
-        await appendLog("Command Line Tools: \(detail)")
+    private func ensureCommandLineTools() async -> Bool {
+        if await hasCommandLineTools() {
+            await appendLog("Command Line Tools: already installed.")
+            return true
+        }
+
+        if options.dryRun {
+            await appendLog("[dry-run] Would trigger the Command Line Tools installer UI.")
+            return false
+        }
+
+        do {
+            let result = try await Shell.run(["/usr/bin/xcode-select", "--install"])
+            let combinedOutput = [result.stdout, result.stderr]
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if result.exitCode == 0 {
+                await appendLog("Command Line Tools: installation requested. Complete the macOS installer prompt, then rerun MacSetup.")
+                return false
+            }
+
+            if combinedOutput.localizedCaseInsensitiveContains("already installed") {
+                await appendLog("Command Line Tools: already installed.")
+                return true
+            }
+
+            let detail = combinedOutput.isEmpty ? "Unable to trigger installation automatically." : combinedOutput
+            await appendLog("Command Line Tools: \(detail)")
+            return false
+        } catch {
+            await appendLog("Command Line Tools: \(error.localizedDescription)")
+            return false
+        }
     }
 
-    private func ensureHomebrew() async {
+    private func ensureHomebrew() async -> Bool {
         if await commandExists("brew") {
             await appendLog("Homebrew: already installed.")
-            return
+            return true
         }
 
         if options.dryRun {
             await appendLog("[dry-run] Would install Homebrew.")
-            return
+            return false
         }
 
-        await appendLog("Homebrew is not installed. Automatic installation is not yet wired into the SwiftUI app.")
+        do {
+            let installerCommand = #"/bin/bash -lc '/bin/bash -c "$(/usr/bin/curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'"#
+            try Shell.openCommandInTerminal(installerCommand)
+            await appendLog("Homebrew: opened the installer in Terminal so macOS can show the password prompt.")
+            await appendLog("Homebrew: finish the install in Terminal, then run MacSetup again.")
+            return false
+        } catch {
+            await appendLog("Homebrew: \(error.localizedDescription)")
+            return false
+        }
     }
 
     private func installHomebrewApp(_ app: AppDefinition) async {
@@ -304,16 +407,16 @@ final class SetupViewModel: ObservableObject {
             return
         }
 
-        guard await commandExists("brew") else {
+        guard let brewPath = await brewExecutablePath() else {
             await updateAppStatus(id: app.id, status: .failed, detail: "Homebrew is not available.")
             return
         }
 
         let command: [String]
         if app.installType == .brewCask {
-            command = ["/opt/homebrew/bin/brew", "install", "--cask", packageID]
+            command = [brewPath, "install", "--cask", packageID]
         } else {
-            command = ["/opt/homebrew/bin/brew", "install", packageID]
+            command = [brewPath, "install", packageID]
         }
 
         do {
@@ -476,6 +579,19 @@ final class SetupViewModel: ObservableObject {
             return candidate
         }
         return nil
+    }
+
+    private func hasCommandLineTools() async -> Bool {
+        if await pathExists("/Library/Developer/CommandLineTools") {
+            return true
+        }
+
+        do {
+            let result = try await Shell.run(["/usr/bin/xcode-select", "-p"])
+            return result.exitCode == 0
+        } catch {
+            return false
+        }
     }
 
     private func commandExists(_ name: String) async -> Bool {

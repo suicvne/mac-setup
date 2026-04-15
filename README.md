@@ -47,7 +47,7 @@ Inside the app bundle, the default config lives at:
 
 The SwiftUI app already handles the core workflow, but a few things are intentionally still conservative:
 
-- Homebrew auto-install is not wired in yet if `brew` is missing.
+- Command Line Tools and Homebrew can now be triggered automatically, but macOS may still require you to confirm installer prompts before the run can continue.
 - Direct vendor `PKG`/`DMG`/`ZIP` installers are modeled, but not yet connected in the app runner.
 - UI-only settings like Apple Intelligence, Spotlight categories, Liquid Glass tint, and menu bar cleanup still live in the manual checklist.
 
