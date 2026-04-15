@@ -164,6 +164,7 @@ final class SetupViewModel: ObservableObject {
     @Published var appRecords: [TaskRecord] = []
     @Published var settingRecords: [TaskRecord] = []
     @Published var manualSteps: [ManualStep] = []
+    @Published var completedManualStepIDs: Set<String> = []
     @Published var configurationSourceDescription = "Bundled configuration"
     @Published var isUsingBundledConfiguration = true
 
@@ -183,7 +184,9 @@ final class SetupViewModel: ObservableObject {
         settingRecords = configuration.settings.map {
             TaskRecord(id: $0.id, area: "Settings", name: $0.name, status: .pending, detail: $0.notes)
         }
-        manualSteps = configuration.manualSteps.compactMap { $0.resolve(for: macOSMajorVersion()) }
+        let resolvedManualSteps = configuration.manualSteps.compactMap { $0.resolve(for: macOSMajorVersion()) }
+        completedManualStepIDs.formIntersection(Set(resolvedManualSteps.map(\.id)))
+        manualSteps = resolvedManualSteps
     }
 
     func runSetup() {
@@ -209,6 +212,22 @@ final class SetupViewModel: ObservableObject {
     func openManualStep(_ step: ManualStep) {
         guard let link = step.link, let url = URL(string: link) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    func isManualStepCompleted(_ step: ManualStep) -> Bool {
+        completedManualStepIDs.contains(step.id)
+    }
+
+    func toggleManualStep(_ step: ManualStep) {
+        if completedManualStepIDs.contains(step.id) {
+            completedManualStepIDs.remove(step.id)
+        } else {
+            completedManualStepIDs.insert(step.id)
+        }
+    }
+
+    func resetManualChecklist() {
+        completedManualStepIDs.removeAll()
     }
 
     func openAppLink(_ app: AppDefinition) {
@@ -252,6 +271,7 @@ final class SetupViewModel: ObservableObject {
         importedConfigurationURL = nil
         configuration = Catalog.shared
         UserDefaults.standard.removeObject(forKey: ConfigPersistence.LastConfigPathKey)
+        resetManualChecklist()
         updateConfigurationSourceDescription()
         refreshRecords()
         appendLogSync("Restored bundled configuration.")
@@ -504,6 +524,7 @@ final class SetupViewModel: ObservableObject {
         do {
             configuration = try Catalog.loadConfiguration(from: url)
             importedConfigurationURL = url
+            resetManualChecklist()
             if persistSelection {
                 try persistBookmark(for: url)
             }

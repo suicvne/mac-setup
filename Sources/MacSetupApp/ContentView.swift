@@ -128,15 +128,40 @@ struct ContentView: View {
 
     private var manualStepsPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Manual Checklist")
-                .font(.title2.weight(.bold))
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Manual Checklist")
+                        .font(.title2.weight(.bold))
+                    Text("\(viewModel.completedManualStepIDs.count) of \(viewModel.manualSteps.count) done")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if !viewModel.completedManualStepIDs.isEmpty {
+                    Button("Clear") {
+                        viewModel.resetManualChecklist()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
 
             ForEach(viewModel.manualSteps) { step in
+                let isCompleted = viewModel.isManualStepCompleted(step)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .top) {
+                        Button {
+                            viewModel.toggleManualStep(step)
+                        } label: {
+                            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                                .imageScale(.large)
+                                .foregroundStyle(isCompleted ? .green : .secondary)
+                        }
+                        .buttonStyle(.plain)
+
                         VStack(alignment: .leading, spacing: 3) {
                             Text(step.title)
                                 .font(.headline)
+                                .strikethrough(isCompleted, color: .secondary)
                             Text(step.area)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -152,14 +177,16 @@ struct ContentView: View {
                     Text(step.detail)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .opacity(isCompleted ? 0.75 : 1)
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(cardFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(borderColor, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(borderColor, lineWidth: 1)
                 }
+                .opacity(isCompleted ? 0.85 : 1)
             }
         }
         .padding(20)
