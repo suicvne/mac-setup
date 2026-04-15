@@ -186,24 +186,29 @@ enum Shell {
         ])
     }
 
-    static func openCommandInTerminal(_ shellCommand: String) throws {
+    static func openCommandInTerminal(
+        _ shellCommand: String,
+        scriptName: String,
+        taskName: String
+    ) throws {
         let fileManager = FileManager.default
         let scriptDirectory = fileManager.temporaryDirectory.appendingPathComponent("MacSetup", isDirectory: true)
         try fileManager.createDirectory(at: scriptDirectory, withIntermediateDirectories: true)
 
-        let scriptURL = scriptDirectory.appendingPathComponent("install-homebrew.command")
+        let scriptURL = scriptDirectory.appendingPathComponent(scriptName)
         let scriptContents = """
         #!/bin/bash
-        set -e
+        set +e
         \(shellCommand)
         status=$?
         echo
         if [ $status -eq 0 ]; then
-            echo "Homebrew installation finished."
+            echo "\(taskName) finished."
         else
-            echo "Homebrew installation failed with status $status."
+            echo "\(taskName) failed with status $status."
         fi
         echo "You can close this window and return to MacSetup."
+        exit $status
         """
 
         try scriptContents.write(to: scriptURL, atomically: true, encoding: .utf8)
@@ -275,6 +280,10 @@ enum Shell {
 
 @MainActor
 final class SetupViewModel: ObservableObject {
+    private enum SpecialSettingCommand: String {
+        case installRosetta2 = "macsetup:install-rosetta2"
+    }
+
     private enum ConfigPersistence {
         static let LastConfigPathKey = "MacSetupImportedConfigurationBookmark"
     }
@@ -430,13 +439,16 @@ final class SetupViewModel: ObservableObject {
                 await updateSettingStatus(id: setting.id, status: .skipped, detail: "Would apply.")
                 await appendLog("[dry-run] \(setting.name)")
                 for commandString in setting.commands {
-                    do {
-                        let command = try Shell.tokenize(commandString)
-                        await appendLog("  raw: \(commandString)")
-                        await appendLog("  parsed: \(command)")
-                    } catch {
-                        await appendLog("  raw: \(commandString)")
-                        await appendLog("  parse error: \(error.localizedDescription)")
+                    await appendLog("  raw: \(commandString)")
+                    if let specialCommand = specialSettingCommand(from: commandString) {
+                        await appendLog("  special: \(specialCommand.rawValue)")
+                    } else {
+                        do {
+                            let command = try Shell.tokenize(commandString)
+                            await appendLog("  parsed: \(command)")
+                        } catch {
+                            await appendLog("  parse error: \(error.localizedDescription)")
+                        }
                     }
                 }
                 continue
@@ -445,6 +457,15 @@ final class SetupViewModel: ObservableObject {
             var failedCommand: [String]?
             for commandString in setting.commands {
                 do {
+                    if let specialCommand = specialSettingCommand(from: commandString) {
+                        let applied = try await runSpecialSettingCommand(specialCommand)
+                        if !applied {
+                            failedCommand = [commandString]
+                            break
+                        }
+                        continue
+                    }
+
                     let command = try Shell.tokenize(commandString)
                     guard !command.isEmpty else { continue }
                     let result = try await Shell.run(command)
@@ -464,7 +485,18 @@ final class SetupViewModel: ObservableObject {
             }
 
             if let failedCommand {
-                await updateSettingStatus(id: setting.id, status: .warning, detail: "Could not apply automatically: \(failedCommand.joined(separator: " "))")
+                if let specialCommand = failedCommand.first.flatMap(specialSettingCommand(from:)) {
+                    switch specialCommand {
+                    case .installRosetta2:
+                        await updateSettingStatus(
+                            id: setting.id,
+                            status: .warning,
+                            detail: "Rosetta 2 needs a Terminal step or could not be opened automatically."
+                        )
+                    }
+                } else {
+                    await updateSettingStatus(id: setting.id, status: .warning, detail: "Could not apply automatically: \(failedCommand.joined(separator: " "))")
+                }
             } else {
                 await updateSettingStatus(id: setting.id, status: .ok, detail: "Applied.")
             }
@@ -520,7 +552,11 @@ final class SetupViewModel: ObservableObject {
 
         do {
             let installerCommand = #"/bin/bash -lc '/bin/bash -c "$(/usr/bin/curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'"#
-            try Shell.openCommandInTerminal(installerCommand)
+            try Shell.openCommandInTerminal(
+                installerCommand,
+                scriptName: "install-homebrew.command",
+                taskName: "Homebrew installation"
+            )
             await appendLog("Homebrew: opened the installer in Terminal so macOS can show the password prompt.")
             await appendLog("Homebrew: finish the install in Terminal, then run MacSetup again.")
             return false
@@ -800,8 +836,57 @@ final class SetupViewModel: ObservableObject {
         return ["/usr/bin/\(name)", "/bin/\(name)", "/usr/sbin/\(name)", "/sbin/\(name)"].contains { fileManager.isExecutableFile(atPath: $0) }
     }
 
+    private func specialSettingCommand(from commandString: String) -> SpecialSettingCommand? {
+        SpecialSettingCommand(rawValue: commandString.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func runSpecialSettingCommand(_ command: SpecialSettingCommand) async throws -> Bool {
+        switch command {
+        case .installRosetta2:
+            return try await installRosetta2IfNeeded()
+        }
+    }
+
     private func pathExists(_ path: String) async -> Bool {
         fileManager.fileExists(atPath: path)
+    }
+
+    private func isAppleSiliconMac() -> Bool {
+        var value: Int32 = 0
+        var size = MemoryLayout<Int32>.size
+        let result = sysctlbyname("hw.optional.arm64", &value, &size, nil, 0)
+        return result == 0 && value == 1
+    }
+
+    private func hasRosetta2() async -> Bool {
+        do {
+            let result = try await Shell.run(["/usr/sbin/pkgutil", "--pkg-info", "com.apple.pkg.RosettaUpdateAuto"])
+            return result.exitCode == 0
+        } catch {
+            return false
+        }
+    }
+
+    private func installRosetta2IfNeeded() async throws -> Bool {
+        guard isAppleSiliconMac() else {
+            await appendLog("Rosetta 2: skipped because this Mac is not Apple silicon.")
+            return true
+        }
+
+        if await hasRosetta2() {
+            await appendLog("Rosetta 2: already installed.")
+            return true
+        }
+
+        let installerCommand = "/usr/sbin/softwareupdate --install-rosetta --agree-to-license"
+        try Shell.openCommandInTerminal(
+            installerCommand,
+            scriptName: "install-rosetta-2.command",
+            taskName: "Rosetta 2 installation"
+        )
+        await appendLog("Rosetta 2: opened the installer in Terminal so macOS can show the password prompt.")
+        await appendLog("Rosetta 2: finish the install in Terminal, then run MacSetup again.")
+        return false
     }
 
     private func macOSMajorVersion() -> Int {

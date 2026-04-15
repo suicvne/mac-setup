@@ -203,6 +203,15 @@
   ],
   "settings": [
     {
+      "id": "rosetta2",
+      "name": "Rosetta 2",
+      "commands": [
+        "macsetup:install-rosetta2"
+      ],
+      "notes": "Installs Rosetta 2 on Apple silicon if it is not already present by opening the macOS installer in Terminal.",
+      "isVersionSensitive": false
+    },
+    {
       "id": "software-update",
       "name": "Automatic updates: download only",
       "commands": [
@@ -250,9 +259,22 @@
         "defaults write com.apple.dock magnification -bool true",
         "defaults write com.apple.dock largesize -int 64",
         "defaults write com.apple.dock show-recents -bool false",
-        "defaults write NSGlobalDomain AppleActionOnDoubleClick -string Fill"
+        "defaults write NSGlobalDomain AppleActionOnDoubleClick -string Fill",
+        "defaults write com.apple.dock persistent-apps -array",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/Applications/Orion.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/System/Applications/Mail.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/System/Applications/Calendar.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/System/Applications/Messages.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/Applications/Discord.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/Applications/VSCodium.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/System/Applications/Music.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/System/Applications/Utilities/Terminal.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "if [ -d /Applications/Xcode.app ]; then defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/Applications/Xcode.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'; fi",
+        "if [ -d /Applications/Pages.app ]; then defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/Applications/Pages.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'; fi",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/System/Applications/TextEdit.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'",
+        "defaults write com.apple.dock persistent-apps -array-add '<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>/System/Applications/System Settings.app</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>'"
       ],
-      "notes": "Places the Dock on the left, enables moderate magnification, and disables recent apps.",
+      "notes": "Places the Dock on the left, enables moderate magnification, disables recent apps, and replaces the pinned app list with a curated set including Xcode and Pages when present.",
       "isVersionSensitive": false
     },
     {

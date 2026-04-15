@@ -65,6 +65,8 @@ The SwiftUI app already handles the core workflow, but a few things are intentio
 - `File -> Import JSON` loads a replacement config from disk and remembers that file for later launches.
 - `Configuration -> Open Active Configuration Directory` reveals the folder containing the current config source.
 - `Configuration -> Use Bundled Configuration` switches back to the default `catalog.json` inside the app bundle.
+- Settings commands can include special `macsetup:` directives in addition to raw shell commands.
+- Use `macsetup:install-rosetta2` inside a setting's `commands` array to optionally install Rosetta 2 on Apple silicon. MacSetup will open the installer in Terminal so the macOS password prompt can appear, similar to the Homebrew flow.
 
 ## Recommended next tweaks
 
