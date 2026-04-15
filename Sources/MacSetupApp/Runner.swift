@@ -217,6 +217,10 @@ enum Shell {
         NSWorkspace.shared.open(scriptURL)
     }
 
+    static func quoteForShell(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
     static func tokenize(_ command: String) throws -> [String] {
         enum TokenizerError: Error {
             case unterminatedQuote
@@ -408,6 +412,16 @@ final class SetupViewModel: ObservableObject {
     }
 
     private func installApps() async {
+        let prerequisiteApps = configuration.apps.filter { $0.installType == .rosetta2 }
+        for app in prerequisiteApps {
+            await updateAppStatus(id: app.id, status: .running, detail: "Working...")
+            let prerequisiteReady = await installRosettaApp(app)
+            if !prerequisiteReady, !options.dryRun {
+                await appendLog("Skipping remaining app installs until Rosetta 2 is installed.")
+                return
+            }
+        }
+
         let commandLineToolsReady = await ensureCommandLineTools()
         if !commandLineToolsReady {
             await appendLog("Skipping Homebrew app installs until Command Line Tools are available.")
@@ -415,7 +429,7 @@ final class SetupViewModel: ObservableObject {
 
         let homebrewReady = commandLineToolsReady ? await ensureHomebrew() : false
 
-        for app in configuration.apps {
+        for app in configuration.apps where app.installType != .rosetta2 {
             await updateAppStatus(id: app.id, status: .running, detail: "Working...")
             switch app.installType {
             case .brewFormula, .brewCask:
@@ -424,6 +438,8 @@ final class SetupViewModel: ObservableObject {
                 } else {
                     await updateAppStatus(id: app.id, status: .warning, detail: "Skipped because Homebrew prerequisites are not ready yet.")
                 }
+            case .rosetta2:
+                break
             case .manual, .appStore:
                 await handleManualApp(app)
             case .internetPkg, .internetDmg, .internetZip:
@@ -636,6 +652,42 @@ final class SetupViewModel: ObservableObject {
         }
     }
 
+    private func installRosettaApp(_ app: AppDefinition) async -> Bool {
+        if !isAppleSiliconMac() {
+            await updateAppStatus(id: app.id, status: .skipped, detail: "Not needed on this Mac.")
+            await appendLog("Rosetta 2: skipped because this Mac is not Apple silicon.")
+            return true
+        }
+
+        if await hasRosetta2() {
+            await updateAppStatus(id: app.id, status: .ok, detail: "Already installed.")
+            await appendLog("Rosetta 2: already installed.")
+            return true
+        }
+
+        if options.dryRun {
+            await updateAppStatus(id: app.id, status: .skipped, detail: "Would install via Terminal.")
+            await appendLog("[dry-run] Would install Rosetta 2 with: /usr/sbin/softwareupdate --install-rosetta --agree-to-license")
+            return true
+        }
+
+        do {
+            let ready = try await installRosetta2IfNeeded()
+            if !ready {
+                await updateAppStatus(
+                    id: app.id,
+                    status: .warning,
+                    detail: "Finish the Terminal installer, then run MacSetup again."
+                )
+            }
+            return ready
+        } catch {
+            await updateAppStatus(id: app.id, status: .failed, detail: error.localizedDescription)
+            await appendLog("Rosetta 2: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     private func handleManualApp(_ app: AppDefinition) async {
         if let appPath = app.appPath, await pathExists(appPath) {
             await updateAppStatus(id: app.id, status: .ok, detail: "Already present at \(appPath).")
@@ -669,15 +721,27 @@ final class SetupViewModel: ObservableObject {
             await updateAppStatus(id: app.id, status: .running, detail: "Downloading installer...")
             let downloadLocation = try await downloadInstaller(for: app, from: downloadURL)
 
+            let installCompletedImmediately: Bool
             switch app.installType {
             case .internetDmg:
                 try await installFromDownloadedDMG(app: app, dmgURL: downloadLocation)
+                installCompletedImmediately = true
             case .internetPkg:
-                try await installFromDownloadedPKG(app: app, pkgURL: downloadLocation)
+                installCompletedImmediately = try await installFromDownloadedPKG(app: app, pkgURL: downloadLocation)
             case .internetZip:
                 try await installFromDownloadedZIP(app: app, zipURL: downloadLocation)
-            case .brewFormula, .brewCask, .manual, .appStore:
-                break
+                installCompletedImmediately = true
+            case .rosetta2, .brewFormula, .brewCask, .manual, .appStore:
+                installCompletedImmediately = true
+            }
+
+            guard installCompletedImmediately else {
+                await updateAppStatus(
+                    id: app.id,
+                    status: .warning,
+                    detail: "Finish the installer in Terminal, then run MacSetup again."
+                )
+                return
             }
 
             if let appPath = app.appPath, await pathExists(appPath) == false, app.installType != .internetPkg {
@@ -1001,14 +1065,24 @@ final class SetupViewModel: ObservableObject {
         try? fileManager.removeItem(at: mountPoint)
     }
 
-    private func installFromDownloadedPKG(app: AppDefinition, pkgURL: URL) async throws {
-        await appendLog("Running installer for \(pkgURL.lastPathComponent)")
-        let result = try await Shell.run(["/usr/sbin/installer", "-pkg", pkgURL.path, "-target", "/"])
-        guard result.exitCode == 0 else {
-            let errorText = [result.stdout, result.stderr]
-                .joined(separator: "\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            throw NSError(domain: "MacSetup.Install", code: Int(result.exitCode), userInfo: [NSLocalizedDescriptionKey: errorText.isEmpty ? "PKG installer failed." : errorText])
+    private func installFromDownloadedPKG(app: AppDefinition, pkgURL: URL) async throws -> Bool {
+        let installerCommand = "sudo /usr/sbin/installer -pkg \(Shell.quoteForShell(pkgURL.path)) -target /"
+
+        do {
+            try Shell.openCommandInTerminal(
+                installerCommand,
+                scriptName: "install-\(app.id).command",
+                taskName: "\(app.name) installation"
+            )
+            await appendLog("\(app.name): opened the installer in Terminal so macOS can show the password prompt.")
+            await appendLog("\(app.name): finish the install in Terminal, then run MacSetup again.")
+            return false
+        } catch {
+            throw NSError(
+                domain: "MacSetup.Install",
+                code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "Could not open Terminal for the PKG installer: \(error.localizedDescription)"]
+            )
         }
     }
 

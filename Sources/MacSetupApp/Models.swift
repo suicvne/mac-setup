@@ -1,6 +1,7 @@
 import Foundation
 
 enum InstallType: String, CaseIterable, Codable {
+    case rosetta2
     case brewFormula
     case brewCask
     case appStore
