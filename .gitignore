@@ -123,3 +123,5 @@ Packages
 xcuserdata
 
 ### SwiftPM ###
+# Local release artifacts
+/dist/

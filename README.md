@@ -74,3 +74,25 @@ The SwiftUI app already handles the core workflow, but a few things are intentio
 - Add profile support like `personal`, `work`, and `gaming`.
 - Add signature or checksum verification for direct download installers.
 - Add an optional aggressive UI automation mode later if you want more settings enforced automatically.
+
+## Build and distribute with scripts
+
+Requires full Xcode. From the repository root:
+
+```sh
+./build.sh
+./dist.sh
+# Optional version/build overrides:
+VERSION=1.1 BUILD_NUMBER=2 ./dist.sh
+```
+
+`build.sh` produces `build/MacSetup.app`, a universal arm64/x86_64
+Release build targeting macOS 13+, with the catalog bundled by Xcode.
+The current project references a missing Assets.xcassets directory; until that
+is restored, the app builds without its custom icon.
+`dist.sh` builds it and creates `dist/MacSetup-1.0.zip` and its `.sha256`
+checksum. It follows vibe-battery-indicator's `release.sh` packaging workflow.
+
+The signature is ad-hoc; these scripts do not notarize or publish the app.
+Gatekeeper may require approval when transferring the app to another Mac.
+Set `DEVELOPER_DIR` to select a different full Xcode installation.
